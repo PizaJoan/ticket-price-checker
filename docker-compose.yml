@@ -1,27 +1,13 @@
 services:
-  scheduler:
-    build: .
+  scraper:
+    build:
+      context: .
+      target: base
     image: ticket-price-checker:latest
     container_name: ticket-price-checker
-    restart: unless-stopped
     command: ["bun", "run", "start"]
     environment:
-      TZ: ${TZ:-Europe/Madrid}
-      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 8 * * *}
-      RUN_ON_START: ${RUN_ON_START:-false}
-      HEADLESS: ${HEADLESS:-true}
+      TZ: "Europe/Madrid"
+      HEADLESS: true
     volumes:
-      - ./data:/app/data
-    shm_size: "1gb"
-
-  scrape:
-    build: .
-    image: ticket-price-checker:latest
-    profiles: ["manual"]
-    command: ["bun", "run", "scrape"]
-    environment:
-      TZ: ${TZ:-Europe/Madrid}
-      HEADLESS: ${HEADLESS:-true}
-    volumes:
-      - ./data:/app/data
-    shm_size: "1gb"
+      - .:/app

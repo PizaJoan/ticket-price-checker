@@ -1,6 +1,6 @@
 import { chromium, type Browser, type Locator, type Page } from "playwright";
 import { env, envBool } from "./env.ts";
-import { appendResults, getScreenshotPath } from "./output.ts";
+import { appendResults, ensureDataDirs, getScreenshotPath } from "./output.ts";
 import { SEARCHES } from "./searches.ts";
 import { SELECTORS } from "./selectors.ts";
 import type { ScrapeResult, SearchConfig } from "./types.ts";
@@ -368,6 +368,8 @@ async function scrapeSearch(page: Page, search: SearchConfig): Promise<ScrapeRes
 }
 
 export async function runScraper(browser?: Browser): Promise<ScrapeResult[]> {
+  await ensureDataDirs();
+
   const ownsBrowser = !browser;
   const activeBrowser =
     browser ??

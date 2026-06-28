@@ -1,5 +1,4 @@
 node_modules/
-bun.lock
 data/prices.txt
 data/screenshots/
 .env

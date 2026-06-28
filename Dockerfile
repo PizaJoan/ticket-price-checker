@@ -1,4 +1,4 @@
-FROM oven/bun:1.2.18-debian
+FROM oven/bun:1.3.14-debian as base
 
 WORKDIR /app
 
@@ -10,10 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN bun install
-
 RUN bunx playwright install --with-deps chromium
+
+# Still TODO
+FROM base as dependencies
+
+COPY package.json bun.lock ./
+RUN bun install
 
 COPY tsconfig.json ./
 COPY src ./src

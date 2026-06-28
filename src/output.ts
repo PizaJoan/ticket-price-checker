@@ -1,19 +1,15 @@
-import { appendFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { ScrapeResult } from "./types.ts";
 
-const DATA_DIR = join(import.meta.dir, "..", "data");
-const PRICES_FILE = join(DATA_DIR, "prices.txt");
-const SCREENSHOTS_DIR = join(DATA_DIR, "screenshots");
+const PRICES_FILE = `${import.meta.dir}/../data/prices.txt`;
+const SCREENSHOTS_DIR = `${import.meta.dir}/../data/screenshots`;
 
 export async function ensureDataDirs(): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true });
-  await mkdir(SCREENSHOTS_DIR, { recursive: true });
+  await Bun.write(`${SCREENSHOTS_DIR}/.gitkeep`, "", { createPath: true });
 }
 
 export function getScreenshotPath(searchId: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return join(SCREENSHOTS_DIR, `${searchId}-${timestamp}.png`);
+  return `${SCREENSHOTS_DIR}/${searchId}-${timestamp}.png`;
 }
 
 function formatResult(result: ScrapeResult): string {
@@ -42,13 +38,17 @@ function formatResult(result: ScrapeResult): string {
 }
 
 export async function appendResult(result: ScrapeResult): Promise<void> {
-  await ensureDataDirs();
-  const block = `${formatResult(result)}\n\n`;
-  await appendFile(PRICES_FILE, block, "utf8");
+  await appendResults([result]);
 }
 
 export async function appendResults(results: ScrapeResult[]): Promise<void> {
-  for (const result of results) {
-    await appendResult(result);
-  }
+  if (results.length === 0) return;
+
+  await ensureDataDirs();
+
+  const file = Bun.file(PRICES_FILE);
+  const existing = (await file.exists()) ? await file.text() : "";
+  const blocks = results.map((result) => `${formatResult(result)}\n\n`).join("");
+
+  await Bun.write(PRICES_FILE, existing + blocks, { createPath: true });
 }

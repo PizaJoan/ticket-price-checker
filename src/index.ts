@@ -1,10 +1,9 @@
-import { Cron } from "croner";
-import { env } from "./env.ts";
+import { env, envBool } from "./env.ts";
 import { runScraper } from "./scraper.ts";
 
 const DEFAULT_CRON = "0 8 * * *";
-const cronSchedule = env("CRON_SCHEDULE", DEFAULT_CRON);
-const runOnStart = env("RUN_ON_START") === "true";
+const cronSchedule = env("CRON_SCHEDULE", DEFAULT_CRON) ?? DEFAULT_CRON;
+const runOnStart = envBool("RUN_ON_START");
 
 async function executeJob(trigger: string): Promise<void> {
   console.log(`[${new Date().toISOString()}] Starting scraper (${trigger})`);
@@ -17,12 +16,14 @@ async function executeJob(trigger: string): Promise<void> {
   }
 }
 
-console.log(`Ticket price checker started. Schedule: ${cronSchedule} (${env("TZ", "system timezone")})`);
+console.log(
+  `Ticket price checker started. Schedule: ${cronSchedule} (UTC; TZ=${env("TZ", "system")} for scraper runtime)`,
+);
 
 if (runOnStart) {
   void executeJob("startup");
 }
 
-new Cron(cronSchedule, () => {
-  void executeJob("cron");
+Bun.cron(cronSchedule, async () => {
+  await executeJob("cron");
 });
