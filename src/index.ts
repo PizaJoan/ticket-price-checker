@@ -1,5 +1,5 @@
-import { env, envBool } from "./env.ts";
-import { runScraper } from "./scraper.ts";
+import { env, envBool } from "./env";
+import { runScraper } from "./scraper";
 
 const DEFAULT_CRON = "0 8 * * *";
 const cronSchedule = env("CRON_SCHEDULE", DEFAULT_CRON) ?? DEFAULT_CRON;

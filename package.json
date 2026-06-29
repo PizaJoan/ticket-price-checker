@@ -5,13 +5,8 @@
   "type": "module",
   "scripts": {
     "scrape": "bun run src/scraper.ts",
-    "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit",
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d scheduler",
-    "docker:down": "docker compose down",
-    "docker:scrape": "docker compose --profile manual run --rm scrape",
-    "docker:logs": "docker compose logs -f scheduler"
+    "test": "playwright test",
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "playwright": "^1.52.0"

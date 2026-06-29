@@ -1,22 +1,26 @@
 import { chromium, type Browser, type Locator, type Page } from "playwright";
-import { env, envBool } from "./env.ts";
-import { appendResults, ensureDataDirs, getScreenshotPath } from "./output.ts";
-import { SEARCHES } from "./searches.ts";
-import { SELECTORS } from "./selectors.ts";
-import type { ScrapeResult, SearchConfig } from "./types.ts";
+import { env, envBool } from "./env";
+import { appendResults, ensureDataDirs, getScreenshotPath } from "./output";
+import { SEARCHES } from "./searches";
+import { SELECTORS } from "./selectors";
+import type { ScrapeResult, SearchConfig } from "./types";
 
 const BASE_URL = "https://www.balearia.com/es";
 const NAVIGATION_TIMEOUT = 60_000;
 const ACTION_TIMEOUT = 30_000;
+const CLOUDFLARE_CHALLENGE_TIMEOUT = 60_000;
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 function timestamp(): string {
   return new Date().toISOString();
 }
 
 async function clickFirstVisible(page: Page, selectors: readonly string[]): Promise<boolean> {
+  await page.waitForTimeout(3_000);
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
-    if (await locator.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    if (await locator.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await locator.click({ timeout: ACTION_TIMEOUT });
       return true;
     }
@@ -28,13 +32,64 @@ async function acceptCookies(page: Page): Promise<void> {
   await clickFirstVisible(page, SELECTORS.cookieAccept);
 }
 
+async function isSiteReady(page: Page): Promise<boolean> {
+  return page
+    .getByText(/Selecciona fechas|Buscar/i)
+    .first()
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
+}
+
+async function clickTurnstileWidget(page: Page): Promise<boolean> {
+  const frame = page.frameLocator('iframe[src*="challenges.cloudflare.com"]').first();
+  const clickTargets = [
+    frame.locator('input[type="checkbox"]'),
+    frame.locator("label"),
+    frame.locator('[role="checkbox"]'),
+    frame.locator("body"),
+  ];
+
+  for (const target of clickTargets) {
+    const locator = target.first();
+    if (await locator.isVisible({ timeout: 500 }).catch(() => false)) {
+      await locator.click({ force: true, timeout: ACTION_TIMEOUT }).catch(() => undefined);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function passCloudflareVerification(page: Page): Promise<void> {
+  const deadline = Date.now() + CLOUDFLARE_CHALLENGE_TIMEOUT;
+
+  while (Date.now() < deadline) {
+    if (await isSiteReady(page)) {
+      return;
+    }
+
+    await clickTurnstileWidget(page);
+    await page.waitForTimeout(1_500);
+  }
+
+  throw new Error("Cloudflare human verification did not complete in time");
+}
+
 async function fillPortByIndex(page: Page, index: number, portName: string): Promise<void> {
   const inputs = page.getByPlaceholder(SELECTORS.portPlaceholder);
-  const input = inputs.nth(index);
-  await input.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
-  await input.click();
-  await input.fill(portName);
-  await page.waitForTimeout(800);
+  try {
+    const input = inputs.nth(index);
+    await input.click();
+    await page.waitForTimeout(1_000);
+    await page.screenshot({ path: getScreenshotPath(portName) });
+    await input.fill(portName);
+
+    await page.waitForTimeout(800);
+  } catch (error) {
+    console.error(error);
+    await page.screenshot({ path: getScreenshotPath(portName) });
+    throw error;
+  }
 
   const option = page.getByRole("option", { name: new RegExp(portName, "i") }).first();
   if (await option.isVisible({ timeout: 3_000 }).catch(() => false)) {
@@ -285,15 +340,16 @@ async function extractPrice(page: Page): Promise<{ price: string; currency: stri
 
 async function fillSearchForm(page: Page, search: SearchConfig): Promise<void> {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+  await passCloudflareVerification(page);
   await acceptCookies(page);
-  await page.waitForTimeout(1_000);
+  // await page.waitForTimeout(1_000);
 
   await fillPortByIndex(page, 0, search.origin);
   await fillPortByIndex(page, 1, search.destination);
-  await selectDates(page, search.outboundDate, search.returnDate);
-  await setPassengers(page, search.passengers);
-  await setMotorcycle(page);
-  await submitSearch(page);
+  // await selectDates(page, search.outboundDate, search.returnDate);
+  // await setPassengers(page, search.passengers);
+  // await setMotorcycle(page);
+  // await submitSearch(page);
 }
 
 async function scrapeSearch(page: Page, search: SearchConfig): Promise<ScrapeResult> {
@@ -375,16 +431,26 @@ export async function runScraper(browser?: Browser): Promise<ScrapeResult[]> {
     browser ??
     (await chromium.launch({
       headless: envBool("HEADLESS", true),
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled",
+      ],
     }));
 
   const context = await activeBrowser.newContext({
     locale: "es-ES",
     timezoneId: env("TZ", "Europe/Madrid"),
     viewport: { width: 1440, height: 1200 },
+    userAgent: USER_AGENT,
   });
 
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", {
+      get: () => undefined,
+    });
+  });
   page.setDefaultTimeout(ACTION_TIMEOUT);
 
   const results: ScrapeResult[] = [];

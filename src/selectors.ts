@@ -1,8 +1,8 @@
 export const SELECTORS = {
   cookieAccept: [
     "#onetrust-accept-btn-handler",
-    'button:has-text("Aceptar todas")',
-    'button:has-text("Aceptar")',
+    'span:has-text("Rechazar")',
+    'span:has-text("Aceptar")',
   ],
   portPlaceholder: "Busca puerto o ciudad",
   searchForm: {

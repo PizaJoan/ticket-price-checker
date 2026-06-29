@@ -1,4 +1,4 @@
-import type { SearchConfig } from "./types.ts";
+import type { SearchConfig } from "./types";
 
 export const SEARCHES: SearchConfig[] = [
   {
@@ -37,4 +37,5 @@ export const SEARCHES: SearchConfig[] = [
       returnTime: "20:00",
     },
   },
-];
+  // TODO: remove slice
+].slice(0, 1);
