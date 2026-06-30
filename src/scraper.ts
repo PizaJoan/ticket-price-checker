@@ -75,36 +75,14 @@ async function passCloudflareVerification(page: Page): Promise<void> {
   throw new Error("Cloudflare human verification did not complete in time");
 }
 
-async function fillPortByIndex(page: Page, index: number, portName: string): Promise<void> {
-  const inputs = page.getByPlaceholder(SELECTORS.portPlaceholder);
-  try {
-    const input = inputs.nth(index);
-    await input.click();
+async function fillPortByIndex(page: Page, index: number, portName: string, escapedPortName: string): Promise<void> {
+  const dropdownTrigger = page.locator(SELECTORS.port.dropdownTrigger[index]);
+  const port = page.locator(`[data-${index === 0 ? 'origin' : 'destination'}="${escapedPortName}"]`);
+
+  await dropdownTrigger.click();
+  await port.click();
+
     await page.waitForTimeout(1_000);
-    await page.screenshot({ path: getScreenshotPath(portName) });
-    await input.fill(portName);
-
-    await page.waitForTimeout(800);
-  } catch (error) {
-    console.error(error);
-    await page.screenshot({ path: getScreenshotPath(portName) });
-    throw error;
-  }
-
-  const option = page.getByRole("option", { name: new RegExp(portName, "i") }).first();
-  if (await option.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await option.click();
-    return;
-  }
-
-  const fallback = page.locator(`li:has-text("${portName}"), button:has-text("${portName}")`).first();
-  if (await fallback.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await fallback.click();
-    return;
-  }
-
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
 }
 
 function parseDate(date: string): { day: number; month: number; year: number } {

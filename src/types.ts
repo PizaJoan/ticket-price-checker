@@ -2,7 +2,9 @@ export interface SearchConfig {
   id: string;
   label: string;
   origin: string;
+  escapedOrigin: string;
   destination: string;
+  escapedDestination: string;
   outboundDate: string;
   returnDate: string;
   passengers: number;

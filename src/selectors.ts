@@ -4,7 +4,13 @@ export const SELECTORS = {
     'span:has-text("Rechazar")',
     'span:has-text("Aceptar")',
   ],
-  portPlaceholder: "Busca puerto o ciudad",
+  port: {
+    placeholder: "Busca puerto o ciudad",
+    dropdownTrigger: [
+      '#sel-route-origin',
+      '#route_destination_click'
+    ]
+  },
   searchForm: {
     datesTrigger: [
       'button:has-text("Selecciona fechas")',
