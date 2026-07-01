@@ -12,11 +12,7 @@ export const SELECTORS = {
     ]
   },
   searchForm: {
-    datesTrigger: [
-      'button:has-text("Selecciona fechas")',
-      '[class*="searcher"] :text("Fechas")',
-      'text=Fechas',
-    ],
+    datesTrigger: 'div.g-calendar',
     passengersTrigger: [
       'button:has-text("Pasajero")',
       'button:has-text("Pasajeros")',
@@ -32,12 +28,7 @@ export const SELECTORS = {
       'button:has-text("Buscar")',
       'a:has-text("Buscar")',
     ],
-    calendarNext: [
-      'button[aria-label*="Siguiente"]',
-      'button[aria-label*="Next"]',
-      '[class*="calendar"] button:has(svg)',
-      'button:has-text(">")',
-    ],
+    calendarNext: 'button.button-next-month',
     calendarConfirm: [
       'button:has-text("Confirmar")',
       'button:has-text("Aplicar")',

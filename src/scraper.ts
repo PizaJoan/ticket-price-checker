@@ -2,13 +2,14 @@ import { chromium, type Browser, type Locator, type Page } from "playwright";
 import { env, envBool } from "./env";
 import { appendResults, ensureDataDirs, getScreenshotPath } from "./output";
 import { SEARCHES } from "./searches";
+import { acceptCookies, fillPortByIndex, passCloudflareVerification, selectDates } from "./scraper-parts";
 import { SELECTORS } from "./selectors";
 import type { ScrapeResult, SearchConfig } from "./types";
 
 const BASE_URL = "https://www.balearia.com/es";
 const NAVIGATION_TIMEOUT = 60_000;
 const ACTION_TIMEOUT = 30_000;
-const CLOUDFLARE_CHALLENGE_TIMEOUT = 60_000;
+const CLICK_TIMEOUT = 4_000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -21,154 +22,11 @@ async function clickFirstVisible(page: Page, selectors: readonly string[]): Prom
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
     if (await locator.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await locator.click({ timeout: ACTION_TIMEOUT });
+      await locator.click({ timeout: CLICK_TIMEOUT });
       return true;
     }
   }
   return false;
-}
-
-async function acceptCookies(page: Page): Promise<void> {
-  await clickFirstVisible(page, SELECTORS.cookieAccept);
-}
-
-async function isSiteReady(page: Page): Promise<boolean> {
-  return page
-    .getByText(/Selecciona fechas|Buscar/i)
-    .first()
-    .isVisible({ timeout: 500 })
-    .catch(() => false);
-}
-
-async function clickTurnstileWidget(page: Page): Promise<boolean> {
-  const frame = page.frameLocator('iframe[src*="challenges.cloudflare.com"]').first();
-  const clickTargets = [
-    frame.locator('input[type="checkbox"]'),
-    frame.locator("label"),
-    frame.locator('[role="checkbox"]'),
-    frame.locator("body"),
-  ];
-
-  for (const target of clickTargets) {
-    const locator = target.first();
-    if (await locator.isVisible({ timeout: 500 }).catch(() => false)) {
-      await locator.click({ force: true, timeout: ACTION_TIMEOUT }).catch(() => undefined);
-      return true;
-    }
-  }
-
-  return false;
-}
-
-async function passCloudflareVerification(page: Page): Promise<void> {
-  const deadline = Date.now() + CLOUDFLARE_CHALLENGE_TIMEOUT;
-
-  while (Date.now() < deadline) {
-    if (await isSiteReady(page)) {
-      return;
-    }
-
-    await clickTurnstileWidget(page);
-    await page.waitForTimeout(1_500);
-  }
-
-  throw new Error("Cloudflare human verification did not complete in time");
-}
-
-async function fillPortByIndex(page: Page, index: number, portName: string, escapedPortName: string): Promise<void> {
-  const dropdownTrigger = page.locator(SELECTORS.port.dropdownTrigger[index]);
-  const port = page.locator(`[data-${index === 0 ? 'origin' : 'destination'}="${escapedPortName}"]`);
-
-  await dropdownTrigger.click();
-  await port.click();
-
-    await page.waitForTimeout(1_000);
-}
-
-function parseDate(date: string): { day: number; month: number; year: number } {
-  const [day, month, year] = date.split("/").map(Number);
-  return { day: day!, month: month!, year: year! };
-}
-
-function monthName(month: number): string {
-  const names = [
-    "enero",
-    "febrero",
-    "marzo",
-    "abril",
-    "mayo",
-    "junio",
-    "julio",
-    "agosto",
-    "septiembre",
-    "octubre",
-    "noviembre",
-    "diciembre",
-  ];
-  return names[month - 1] ?? "";
-}
-
-async function getVisibleMonthLabel(page: Page): Promise<string> {
-  const calendarHeader = page.locator('[class*="calendar"], [role="dialog"]').locator("text=/\\w+\\s+\\d{4}/").first();
-  if (await calendarHeader.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    return (await calendarHeader.innerText()).trim().toLowerCase();
-  }
-  return "";
-}
-
-async function navigateCalendarTo(page: Page, month: number, year: number): Promise<void> {
-  const target = `${monthName(month)} ${year}`;
-  for (let attempt = 0; attempt < 24; attempt += 1) {
-    const current = await getVisibleMonthLabel(page);
-    if (current.includes(monthName(month)) && current.includes(String(year))) {
-      return;
-    }
-    const moved = await clickFirstVisible(page, SELECTORS.searchForm.calendarNext);
-    if (!moved) {
-      throw new Error(`Could not navigate calendar to ${target}`);
-    }
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`Calendar did not reach ${target}`);
-}
-
-async function clickCalendarDay(page: Page, day: number): Promise<void> {
-  const dayRegex = new RegExp(`^${day}$`);
-  const candidates = [
-    page.getByRole("button", { name: dayRegex }),
-    page.locator(`[data-day$="-${String(day).padStart(2, "0")}"]`),
-    page.locator(`button:has-text("${day}")`),
-  ];
-
-  for (const candidate of candidates) {
-    const locator = candidate.first();
-    if (await locator.isVisible({ timeout: 1_500 }).catch(() => false)) {
-      await locator.click({ timeout: ACTION_TIMEOUT });
-      return;
-    }
-  }
-
-  throw new Error(`Could not select calendar day ${day}`);
-}
-
-async function selectDates(page: Page, outboundDate: string, returnDate: string): Promise<void> {
-  const opened = await clickFirstVisible(page, SELECTORS.searchForm.datesTrigger);
-  if (!opened) {
-    throw new Error("Could not open date picker");
-  }
-
-  await page.waitForTimeout(500);
-
-  const outbound = parseDate(outboundDate);
-  await navigateCalendarTo(page, outbound.month, outbound.year);
-  await clickCalendarDay(page, outbound.day);
-  await page.waitForTimeout(300);
-
-  const returning = parseDate(returnDate);
-  await navigateCalendarTo(page, returning.month, returning.year);
-  await clickCalendarDay(page, returning.day);
-
-  await clickFirstVisible(page, SELECTORS.searchForm.calendarConfirm);
 }
 
 async function setPassengers(page: Page, count: number): Promise<void> {
@@ -317,14 +175,17 @@ async function extractPrice(page: Page): Promise<{ price: string; currency: stri
 }
 
 async function fillSearchForm(page: Page, search: SearchConfig): Promise<void> {
+  // Basic navigation and verification
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
   await passCloudflareVerification(page);
   await acceptCookies(page);
-  // await page.waitForTimeout(1_000);
 
-  await fillPortByIndex(page, 0, search.origin);
-  await fillPortByIndex(page, 1, search.destination);
-  // await selectDates(page, search.outboundDate, search.returnDate);
+  // Fill port by index
+  await fillPortByIndex(page, 0, search.origin, search.escapedOrigin);
+  await fillPortByIndex(page, 1, search.destination, search.escapedDestination);
+
+  await selectDates(page, search.outboundDate, search.returnDate);
+
   // await setPassengers(page, search.passengers);
   // await setMotorcycle(page);
   // await submitSearch(page);
